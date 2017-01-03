@@ -2,13 +2,19 @@
 # Author         : Henry Lin <hlin117@gmail.com>
 # License        : BSD 3 clause
 #==============================================================================
-
 from __future__ import division
+import os 
+import csv
+import dill
+import collections
+import subprocess
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 from sklearn.utils import check_array, check_X_y, column_or_1d, check_random_state
 from sklearn.utils import check_random_state
+from joblib import Parallel, delayed
+import multiprocessing
 from _mdlp import MDLPDiscretize
 
 class MDLP(BaseEstimator, TransformerMixin):
@@ -83,19 +89,20 @@ class MDLP(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, continuous_features=None, min_depth=0, shuffle=True,
-                 random_state=None):
+                 random_state=None, n_jobs=1):
         # Parameters
         self.continous_features = continuous_features
         self.min_depth = min_depth
         self.random_state = random_state
         self.shuffle = shuffle
+        self.n_jobs = n_jobs
 
         # Attributes
         self.continuous_features_ = continuous_features
         self.cut_points_ = None
         self.dimensions_ = None
 
-    def fit(self, X, y):
+    def fit(self, X, y, verbose=11):
         """Finds the intervals of interest from the input data.
 
         Parameters
@@ -133,12 +140,8 @@ class MDLP(BaseEstimator, TransformerMixin):
                 self.continuous_features_ = np.arange(X.shape[1])
 
             self.cut_points_ = dict()
-
-            for index, col in enumerate(X.T):
-                if index not in self.continuous_features_:
-                    continue
-                cut_points = MDLPDiscretize(col, y, self.min_depth)
-                self.cut_points_[index] = cut_points
+            scores = Parallel(n_jobs=self.n_jobs,verbose=verbose)(delayed(MDLPDiscretize)(col, y, self.min_depth) for col in X.T)
+            self.cut_points_ = scores
         else:
             if self.continuous_features_ is not None:
                 raise ValueError("Passed in a 1-d column of continuous features, "
